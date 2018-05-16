@@ -2,32 +2,43 @@ require 'sinatra'
 require 'httparty'
 require 'securerandom'
 require 'twilio-ruby'
+require 'httparty'
+require 'optimizely'
+require 'pry'
 
 # STEP 1: Add the Optimizely Full Stack Ruby gem
-# STEP 2: Require the Optimizely gem 
+# STEP 2: Require the Optimizely gem
 # STEP 3: Include the twilio account SID, auth token and phone number below
 
 # => Log into Twilio and access the account SID, token, and number
-TWILIO_NUMBER = '+14157022765'
-TWILIO_ACCOUNT_SID = 'replace with twilio sid'
-TWILIO_AUTH_TOKEN = 'replace with auth token'
+TWILIO_NUMBER = '+14155691046'
+TWILIO_ACCOUNT_SID = ''
+TWILIO_AUTH_TOKEN = ''
 
 # Optimizely Setup
 
 # Step 4: Replace this url with your own Optimizely Project
 
-DATAFILE_URL = 'https://cdn.optimizely.com/public/8785893177/s/10677861955_10677861955.json'
+DATAFILE_URL = 'https://cdn.optimizely.com/public/8002358607/s/10736280244_10736280244.json'
 
 DATAFILE_URI_ENCODED = URI(DATAFILE_URL)
 
-# => Step 5: Use a library, such as HTTParty, to get grab the datafile from the CDN 
+# => Step 5: Use a library, such as HTTParty, to get grab the datafile from the CDN
 #         https://github.com/jnunemaker/httparty#examples
 #         example: response = HTTParty.get('http://api.stackexchange.com/2.2/questions?site=stackoverflow').body
-#         The above line will return the body of the http request 
+#         The above line will return the body of the http request
 #         NOTE: use the uri encoded url shown above :)
+
+
+
 
 # => Step 6: Initialize the Optimizely SDK using the json retrieved from step 4
 #		  https://developers.optimizely.com/x/solutions/sdks/reference/?language=ruby
+datafile = HTTParty.get(DATAFILE_URI_ENCODED).body
+optimizely_client = Optimizely::Project.new(datafile)
+
+
+
 
 # => Initializing the Twilio client to send sms messages
 # => https://www.twilio.com/docs/libraries/ruby
@@ -39,12 +50,12 @@ get '/' do
 end
 
 # => GET endpoint to receive messages, this should be setup as a webhook in Twilio
-# => anytime twilio receives a message on our number, Twilio will make a request to this endpoint 
+# => anytime twilio receives a message on our number, Twilio will make a request to this endpoint
 get '/sms' do
-  
+
   # => Getting the number that texted the sms service
 	sender_number = params[:From]
-  
+
   # => Getting the message that was sent to the service
   # => We could use this to understand what the user said, and create a conversational dialog
 	text_body = params[:Body]
@@ -63,6 +74,21 @@ get '/sms' do
 	# => Using the helper function to reply to the number who messaged the sms service
   # => example: send_sms "Hey this is a response!" sender_number
 
+
+  variation_key = optimizely_client.activate('my_experiment', user_id)
+  if variation_key == 'original'
+    # execute code for original
+    send_sms "Hello there! You're in the #{variation_key} variation 😇", sender_number
+  elsif variation_key == 'treatment'
+    # execute code for treatment
+    send_sms "Hello there! You're in the #{variation_key} variation", sender_number
+  else
+    # execute default code
+    send_sms "Oops, you did not get bucketed into the experiment", sender_number
+  end
+
+
+
 end
 
 # => BONUS: Implement a Optimizely webhooks to receive updates when your datafile changes & reinitialize the SDK
@@ -75,6 +101,5 @@ def send_sms body, number
       from: TWILIO_NUMBER,
       to: number,
       body: body
-    ) 
+    )
 end
-
